@@ -1,52 +1,120 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
 	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.serialization)
 	alias(libs.plugins.ksp)
-	alias(libs.plugins.easymodding)
+	alias(libs.plugins.fabric.loom)
+	alias(libs.plugins.shadow)
 	`maven-publish`
 }
 
 base {
-	archivesName.set("pandas-falling-trees-fabric")
+	archivesName.set("fallingtrees-fabric")
 }
 
 repositories {
 	mavenLocal()
-	maven(providers.gradleProperty("LocalRepo"))
 	mavenCentral()
 }
 
+val common = configurations.create("common") {
+	isCanBeResolved = true
+	isCanBeConsumed = false
+}
+
+val shadowCommon = configurations.create("shadowCommon") {
+	isCanBeResolved = true
+	isCanBeConsumed = false
+}
+
+configurations.compileClasspath.get().extendsFrom(common)
+configurations.runtimeClasspath.get().extendsFrom(common)
+
 dependencies {
-	api(project(":common"))
+	minecraft("com.mojang:minecraft:${project.property("minecraft_version")}")
+	implementation("net.fabricmc:fabric-loader:${project.property("fabric_loader_version")}")
+	implementation("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_api_version")}")
 
-	implementation("net.fabricmc:fabric-loader:0.19.3")
-	implementation("net.fabricmc.fabric-api:fabric-api:0.155.2+26.2")
+	common(project(":common")) { isTransitive = false }
+	shadowCommon(project(":common")) { isTransitive = false }
+
+	implementation(libs.autoService.annotations)
+	ksp(libs.autoService.ksp)
+
+	api(libs.pandalib.fabric)
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-
-kotlin {
-	jvmToolchain(21)
-}
-
-easyModding {
-	configPath = rootProject.file("easymodding.mod.json")
-	minecraftVersion = "26.2"
-
-	fabric()
-
-	modDependencies {
-		modImplementation("net.fabricmc:fabric-loader:0.19.3")
-		modImplementation("net.fabricmc.fabric-api:fabric-api:0.155.2+26.2")
-
-		modImplementation("dev.pandasystems:pandalib-fabric:1.0.0-SNAPSHOT")
+java {
+	toolchain {
+		languageVersion.set(JavaLanguageVersion.of(25))
 	}
 }
 
+kotlin {
+	jvmToolchain(25)
+}
+
+loom {
+	runs {
+		named("client") {
+			client()
+			configName = "Fabric Client"
+			ideConfigGenerated(true)
+			runDir("../.runs/client")
+		}
+		named("server") {
+			server()
+			configName = "Fabric Server"
+			ideConfigGenerated(true)
+			runDir("../.runs/server")
+		}
+	}
+}
+
+tasks.processResources {
+	val replaceProperties = mapOf(
+		"mod_id" to project.property("mod_id"),
+		"mod_name" to project.property("mod_name"),
+		"mod_version" to project.property("mod_version"),
+		"mod_description" to project.property("mod_description"),
+		"mod_authors" to project.property("mod_authors"),
+		"mod_license" to project.property("mod_license"),
+		"minecraft_version" to project.property("minecraft_version"),
+		"fabric_loader_version" to project.property("fabric_loader_version"),
+		"fabric_api_version" to project.property("fabric_api_version")
+	)
+	inputs.properties(replaceProperties)
+	filesMatching("fabric.mod.json") {
+		expand(replaceProperties)
+	}
+}
+
+tasks.named<ShadowJar>("shadowJar") {
+	configurations = listOf(shadowCommon)
+	archiveClassifier.set("")
+}
+
+tasks.named<Jar>("jar") {
+	archiveClassifier.set("slim")
+}
+
+tasks.named("assemble") {
+	dependsOn(tasks.named("shadowJar"))
+}
+
 publishing {
+	publications {
+		create<MavenPublication>("maven") {
+			from(components["java"])
+			artifactId = "fallingtrees-fabric"
+		}
+	}
+
 	repositories {
 		maven {
 			name = "LocalRepo"
-			url = uri(providers.gradleProperty("LocalRepo"))
+			url = uri(providers.gradleProperty("LocalRepo").getOrElse("${rootProject.layout.buildDirectory.get()}/repo"))
 		}
 	}
 }

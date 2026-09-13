@@ -18,7 +18,7 @@ class FallingTreesMain {
 				instance = main
 			} else {
 				logger.warn("""
-					PFallingTreesMain instance already initialized.
+					FallingTreesMain instance already initialized.
 					This is only intended for testing purposes.
 				""".trimIndent())
 			}
