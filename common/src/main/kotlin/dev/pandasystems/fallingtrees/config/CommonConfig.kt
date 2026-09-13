@@ -1,6 +1,5 @@
 package dev.pandasystems.fallingtrees.config
 
-import dev.pandasystems.pandalib.config.handle.ConfigHandle
 import kotlinx.serialization.Serializable
 
 @Serializable
